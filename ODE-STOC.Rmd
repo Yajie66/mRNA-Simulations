@@ -1,0 +1,247 @@
+---
+title: "ODE_STO"
+author: "Yajie Guo"
+date: "19/11/2024"
+output: html_document
+---
+
+
+# The original stochastic model with three reactions
+
+```{r}
+ssa.f<-function(Mt,theta,S0){
+  
+  Sini<-S0
+  
+  names(Sini)<-c('S1','S2')
+  
+  S.can<-S0
+  
+  t<-0
+  
+  Reaction<-matrix(c(-1,0,0,+1,0,-1),byrow=TRUE,ncol=2)
+  
+while(t[length(t)] <= Mt){
+  
+if ( S.can[1] != 0  |   S.can[2] != 0 ){
+  
+  theta.can<-c(theta[1]*S.can[1], theta[2]*S.can[1], theta[3]*S.can[2])
+  
+  lambda<-sum(theta.can, na.rm = T) 
+  
+  wait<-rexp(1,rate=lambda)
+  
+  
+  t[length(t)+1] <-t[length(t)]+wait
+  
+if ( S.can[1] > 0  ){
+
+  
+prob<-theta.can/lambda   
+ 
+R.can<-sample(size =1,x=c(1,2,3), prob = prob)
+ 
+
+
+  if(R.can==1){
+    S.can<-S.can+Reaction[1,] } else{
+      
+      if(R.can==3){
+        S.can<-S.can+Reaction[3,]
+      }else{
+        
+       S.can<-S.can+Reaction[2,]
+      }
+  }
+  
+  }else{
+    
+  if(S.can[2] > 0){
+   S.can<- S.can+Reaction[3,] }else{ return( cbind.data.frame(t,Sini) )  } 
+  
+  }
+  
+}else{ return(cbind.data.frame(t,Sini) )}
+  
+  Sini<-rbind.data.frame(Sini,S.can)
+  
+}
+cbind.data.frame(t,Sini)
+  }
+  
+```
+
+
+
+```{r,include = FALSE}
+N=100
+theta<-c(0.11, 0.001*N, 0.03)
+
+SSA.OUT<-ssa.f(Mt=50,theta=theta,S0=c(N,0))
+ts.plot(SSA.OUT[,-1])
+```
+
+#ODE models
+```{r,include=FALSE}
+
+# Load the deSolve package
+library(deSolve)
+
+# Define the ODE system
+ode.mRNA <- function(t, x, para) {
+  x1 <- x[1]
+  x2 <- x[2]
+  
+  dx1dt <- -para[1] * x1
+  dx2dt <- para[2] * x1 - para[3] * x2
+  
+  list(c(dx1dt, dx2dt))
+}
+
+# Parameters and initial conditions
+N <- 100
+theta <- c(0.11, 0.001 * N, 0.03)
+S0 <- c(N, 0)  # Initial values for x1 and x2
+time <- seq(0, 100, length.out = 100)
+
+# Solve the ODE
+solution <- ode(func = ode.mRNA, y = S0, times = time, parms = theta)
+
+# Convert the solution to a data frame for plotting
+solution_df <- as.data.frame(solution)
+
+# Plot the results
+plot(solution_df$time, solution_df$`1`, type = "l", col = "blue", lwd = 2,
+     xlab = "Time", ylab = "Concentration",
+     main = "ODE Solution for mRNA Dynamics")
+lines(solution_df$time, solution_df$`2`, col = "red", lwd = 2)
+legend("topright", 
+       legend = c(expression(x[1](t) ~ "(mRNA)"), expression(x[2](t) ~ "(Protein)")),
+       col = c("blue", "red"), lty = 1, lwd = 2)
+```
+
+
+
+```{r}
+
+# the iteration of original stochastic model
+
+ssa.out<-function(Mt,scale,theta,S0,iter){
+ 
+  times=seq(0,Mt,by=Mt/scale)
+  
+  si.out<-matrix(NA,ncol=2*iter+1,nrow = length(times))
+  si.out[,1]<-times
+  #get the name
+s1.name<- paste("S1.ssa",c(1:iter),sep = ".")
+ #s1.name<-rep('S1.ssa',iter) 
+s2.name<-paste("S2.ssa",c(1:iter),sep = ".")
+ #s2.name<-rep('S2.ssa',iter)
+  colnames(si.out) <- c("times",s1.name,s2.name)
+ 
+  for(i in 1:iter){
+    
+   result<-na.omit(ssa.f(Mt,theta,S0)) 
+ index<-findInterval(times,result[,1])
+   si.out[,i+1]<-result[index,2]
+    si.out[,i+1+iter]<-result[index,3]
+   }
+  
+ si.out
+}
+```
+
+
+# Graphic simulation with stochastic model and ODE
+
+```{r,include=FALSE}
+library(reshape)
+library(ggplot2)
+library(gghighlight)
+library(dplyr)
+library(matrixStats)
+```
+
+```{r}
+#STOCHASTIC
+iter=100
+
+Ori<-ssa.out(Mt=50,scale=100,theta=theta,S0=c(N,0),iter=iter)
+#head(Ori)
+
+#S1.ori<-cbind.data.frame(Ori[,1:(iter+1)],S1.ori.mean=rowMeans(Ori[,2:(iter+1)]),"Species" = "S1.ori")
+
+#S1.ori<-cbind.data.frame(Ori[,1:(iter+1)],S1.ori.q.25=rowQuantiles(Ori[,2:(iter+1)],prob=0.25),S1.ori.q.75=rowQuantiles(Ori[,2:(iter+1)],prob=0.75),"Species" = "S1.ori")
+
+S1.ori<-cbind.data.frame(Ori[,1:(iter+1)],"Species" = "mRNA.Stochatic")
+
+
+
+#head(S1.ori)
+S1.ori.melt<-melt(S1.ori,id = c("times","Species"))
+
+
+#S2.ori<-cbind.data.frame(Ori[,-c(2:(iter+1))],S2.ori.mean=rowMeans(Ori[,-c(1:(iter+1))]),"Species" = "S2.ori") 
+
+
+#S2.ori<-cbind.data.frame(Ori[,-c(2:(iter+1))],S2.ori.q.25=rowQuantiles(Ori[,-c(1:(iter+1))],prob=0.25),S2.ori.q.75=rowQuantiles(Ori[,-c(1:(iter+1))],prob=0.75),"Species" = "S2.ori") 
+
+#head(S2.ori)
+
+
+
+S2.ori<-cbind.data.frame(Ori[,-c(2:(iter+1))],"Species" = "Protein.Stochastic") 
+
+S2.ori.melt<-melt(S2.ori,id = c("times","Species"))
+
+#head(S2.ori.melt)
+
+
+
+
+
+# Parameters and initial conditions
+N <- 100
+theta <- c(0.11, 0.001 * N, 0.03)
+S0 <- c(N, 0)  # Initial values for x1 and x2
+time <- seq(0, 50, length.out = 100) #length=Scale
+
+# Solve the ODE
+solution <- ode(func = ode.mRNA, y = S0, times = time, parms = theta)
+
+# Convert the solution to a data frame for plotting
+solution_df <- as.data.frame(solution)
+
+#head(solution_df)
+
+#ODE-DATA
+S1.ode<-cbind.data.frame("times"=solution_df$time,"Species" ="mRNA.ODE","ode.s1"=solution_df$`1`)
+
+S2.ode<-cbind.data.frame("times"=solution_df$time,"Species" = "Protein.ODE","ode.s2"=solution_df$`2`)
+
+S1.ode.melt<-melt(S1.ode,id = c("times","Species"))
+S2.ode.melt<-melt(S2.ode,id = c("times","Species"))
+
+All.data<-rbind.data.frame(S1.ori.melt,S2.ori.melt,S1.ode.melt,S2.ode.melt)
+
+
+
+```
+
+
+
+```{r,fig.align = 'center',warning=FALSE,message=FALSE}
+
+plot<-ggplot(All.data, aes(x = times, y = value, group = variable)) +
+  geom_point(aes(shape = Species), size = 0.5, alpha = 0.5) +
+  geom_line(aes(colour = Species, linetype = Species), size = 0.7) +
+  scale_linetype_manual(values = c("twodash", "dotted", "solid", "solid")) +
+  labs(x = 'Time (s)', 
+       y = 'Number of individual species molecules', 
+       title = 'ODE and Original Stochastic Model of mRNA Translation Reactions')
+# Save plot as a PDF
+ggsave("ODE_Stochastic_Model_Plot.pdf", plot = plot, device = "pdf", width = 8, height = 6)
+```
+
+
+
