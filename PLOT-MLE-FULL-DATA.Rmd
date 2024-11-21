@@ -1,0 +1,438 @@
+---
+title: "PLOT-MLE-FULLDATA"
+author: "Yajie Guo"
+date: "01/08/2024"
+output: html_document
+---
+
+
+```{r}
+library(ggplot2)
+
+library(reshape)
+library(plyr)
+
+```
+
+
+
+```{r}
+setwd(dir)
+
+
+mle.ori<-read.csv("/Users/YAJIEGUO1/Documents/FUNDATIONr/rep2.mle-ori-n=1000,iter=10000.csv",colClasses=c("NULL",NA,NA,NA))
+mle.approx<-read.csv("/Users/YAJIEGUO1/Documents/FUNDATIONr/rep2.mle-approx-n=1000,iter=10000.csv",colClasses=c("NULL",NA,NA,NA))
+```
+
+
+
+```{r}
+
+data.theta1.mle<-data.frame(id=1:length(mle.ori[,1]),mle.ori[,1],mle.approx[,1],stringsAsFactors=FALSE)
+
+colnames(data.theta1.mle)<-c("id",expression(theta[1]^mle~original),expression(theta[1]^mle~limit))
+
+ melt.theta1.mle<-melt(data.theta1.mle,id=c("id"))
+ 
+```
+ 
+ 
+```{r}
+ 
+mu<-ddply(melt.theta1.mle, "variable", summarise, theta1.mean=mean(value))
+
+mu
+
+class(mu$variable)
+class(mu$theta1.mean)
+
+mu$variable<-as.character(mu$variable)
+
+
+mu[3,]<-c(as.character(expression(theta[1]^mle~true)),theta[1]) 
+
+
+mu
+
+mu$variable<-as.factor(mu$variable)
+
+mu$theta1.mean<-as.numeric(mu$theta1.mean)
+
+class(mu$theta1.mean)
+
+colnames(mu)<-c("variable",expression(theta[1]^mle~mean))
+mu
+```
+
+#################################################################
+#waste_rubbish
+```{r}
+hist(melt.theta1.mle$value,xlab=as.expression((melt.theta1.mle$variable[1])))
+
+paste(levels(melt.theta1.mle$variable))
+paste(expression(theta[1]^mle))
+class(melt.theta1.mle$variable)
+
+as.character(expression(melt.theta1.mle$variable))
+
+as.expression(as.character(melt.theta1.mle$variable[1]))
+
+```
+
+#Finally the theta1 graph
+#graph
+
+```{r}
+f1.1<-ggplot(melt.theta1.mle,aes(x=value,color=variable,fill=variable))+geom_histogram(aes(y = ..density..),alpha=0.5,boundary = 0,show.legend = TRUE,position="identity")+scale_color_discrete(labels = c(expression(theta[1]^mle~-original), expression(theta[1]^mle~-approximate))) +scale_fill_discrete(labels = c(expression(theta[1]^mle~-original), expression(theta[1]^mle~-approximate)))+guides(fill = guide_legend(title = expression(theta[1]^mle)),colour = guide_legend(title = expression(theta[1]^mle)))
+
+f1<-f1.1+ylab("Count")+xlab(expression(theta[1]^mle))+geom_density(alpha=0.5)+ggtitle(expression (Histogram~of ~ theta[1]^mle))+theme_bw()+theme(axis.title.x = element_text(size=20),axis.title.y = element_text(size=20),axis.text.x=element_text(size=20),axis.text.y=element_text(size=20),title=element_text(size=20),legend.text = element_text(size=14),legend.title = element_text(size=15))
+f1
+```
+
+
+```{r}
+
+#mu$`theta[1]^mle ~ mean`
+#f1
+f2<-f1+geom_vline(xintercept = mu$`theta[1]^mle ~ mean`,color=c("red","blue","darkgreen"))
+#f2
+  
+lab1<-bquote(theta[1]^mle~true==.(theta[1]))
+
+f2.1<-f2+annotate("text", x=1.125*theta[1],y=80, label=lab1,size=6,angle=0,color="blue")
+
+#f2.1
+
+
+####
+mu.ori<-round(mu$`theta[1]^mle ~ mean`[1],4)
+
+ lab.ori<-bquote(bar(theta)[1]^mle*original == .(mu.ori))
+ 
+ 
+ 
+#lab.ori<-paste("Theta1.MLE.Ori=",round(mu$theta1.mean[1],4))
+
+
+
+f2.2<-f2.1+annotate("text", x=1.125*theta[1],y=72,label=lab.ori,size=6,angle=0,color="red")
+#f2.2
+
+mu.approx<-round(mu$`theta[1]^mle ~ mean`[2],4)
+
+lab.approx<-bquote(bar(theta)[1]^mle*approximate == .(mu.approx))
+ 
+
+#lab.appro<-paste("Theta1.MLE.Limit=",round(mu$theta1.mean[2],4))
+
+f2.3<-f2.2+annotate("text", x=1.125*theta[1],y=64, label=lab.approx,size=6,angle=0,color="darkgreen")
+f2.3
+
+
+```
+
+```{r}
+ggsave("theta1.mle.pdf",scale=1,width=30,height=20,units="cm")
+```
+
+
+
+
+
+#Let's see theta.2
+
+```{r}
+
+data.theta2.mle<-data.frame(id=1:length(mle.ori[,1]),mle.ori[,2],mle.approx[,2],stringsAsFactors=FALSE)
+
+colnames(data.theta2.mle)<-c("id","theta2.mle.original","theta2.mle.limit")
+
+melt.theta2.mle<-melt(data.theta2.mle,id=c("id"))
+
+
+mu.2<-ddply(melt.theta2.mle, "variable", summarise, theta2.mean=mean(value))
+
+mu.2$variable<-as.character(mu.2$variable)
+
+mu.2[3,]<-c('True.Theta2',theta[2]) 
+
+
+
+mu.2$variable<-as.factor(mu.2$variable)
+mu.2$theta2.mean<-as.numeric(mu.2$theta2.mean)
+
+class(mu.2$theta2.mean)
+
+```
+
+#The final one
+
+```{r}
+P1<-ggplot(melt.theta2.mle,aes(x=value,color=variable,fill=variable))+geom_histogram(aes(y = ..density..),alpha=0.5,boundary = 0,show.legend = TRUE,position="identity")+scale_color_discrete(labels = c(expression(theta[2]^mle~-original), expression(theta[2]^mle~-approximate))) +scale_fill_discrete(labels = c(expression(theta[2]^mle~-original), expression(theta[2]^mle~-approximate)))+guides(fill = guide_legend(title = expression(theta[2]^mle)),colour = guide_legend(title = expression(theta[2]^mle)))+ylab("Count")+xlab(expression(theta[2]^mle))+geom_density(alpha=0.5)+ggtitle(expression (Histogram~of ~ theta[2]^mle))+theme_bw()+theme(axis.title.x = element_text(size=20),axis.title.y = element_text(size=20),axis.text.x=element_text(size=20),axis.text.y=element_text(size=20),title=element_text(size=20),legend.text = element_text(size=14),legend.title = element_text(size=15))
+P2<-P1+geom_vline(xintercept = mu.2$theta2.mean,color=c("red","blue","darkgreen"))
+
+P2
+
+```
+
+```{r}
+t2.lab1<-bquote(theta[2]^mle~true==.(theta[2]))
+
+P2.1<-P2+annotate("text", x=1.07*theta[2],y=15, label=t2.lab1,size=7,angle=0,color="blue")
+#P2.1
+
+####
+mu.2.ori<-round(mu.2$theta2.mean[1],4)
+
+ lab.2.ori<-bquote(bar(theta)[2]^mle*original == .(mu.2.ori))
+ 
+ 
+ 
+#lab.ori<-paste("Theta1.MLE.Ori=",round(mu$theta1.mean[1],4))
+
+
+
+P2.2<-P2.1+annotate("text", x=1.07*theta[2],y=12.5,label=lab.2.ori,size=7,angle=0,color="red")
+#P2.2
+
+mu.2.approx<-round(mu.2$theta2.mean[2],4)
+
+lab.2.approx<-bquote(bar(theta)[2]^mle*approximate == .(mu.2.approx))
+ 
+
+#lab.appro<-paste("Theta1.MLE.Limit=",round(mu$theta1.mean[2],4))
+
+P2.3<-P2.2+annotate("text", x=1.07*theta[2],y=10, label=lab.2.approx,size=6,angle=0,color="darkgreen")
+P2.3
+```
+
+
+```{r}
+ggsave("theta2.mle.pdf",scale=1,width=30,height=20,units="cm")
+```
+
+
+
+
+#Let's see theta 3
+####
+#####
+
+##let see theta3
+
+```{r}
+data.theta3.mle<-data.frame(id=1:length(mle.ori[,1]),mle.ori[,3],mle.approx[,3],stringsAsFactors=FALSE)
+
+colnames(data.theta3.mle)<-c("id","theta3.mle.original","theta3.mle.limit")
+
+ melt.theta3.mle<-melt(data.theta3.mle,id=c("id"))
+ 
+ 
+mu.3<-ddply(melt.theta3.mle, "variable", summarise, theta3.mean=mean(value))
+
+mu.3$variable<-as.character(mu.3$variable)
+
+mu.3[3,]<-c('True.Theta3',theta[3]) 
+
+
+
+mu.3$variable<-as.factor(mu.3$variable)
+mu.3$theta3.mean<-as.numeric(mu.3$theta3.mean)
+
+class(mu.3$theta3.mean)
+
+```
+
+
+```{r}
+G1<-ggplot(melt.theta3.mle,aes(x=value,color=variable,fill=variable))+geom_histogram(aes(y = ..density..),alpha=0.5,boundary = 0,show.legend = TRUE,position="identity",binwidth=.0001)+scale_color_discrete(labels = c(expression(theta[3]^mle~-original), expression(theta[3]^mle~-approximate))) +scale_fill_discrete(labels = c(expression(theta[3]^mle~-original), expression(theta[3]^mle~-approximate)))+guides(fill = guide_legend(title = expression(theta[3]^mle)),colour = guide_legend(title = expression(theta[3]^mle)))+ylab("Count")+xlab(expression(theta[3]^mle))+geom_density(alpha=0.5)+ggtitle(expression (Histogram~of ~ theta[3]^mle))+theme_bw()+theme(axis.title.x = element_text(size=20),axis.title.y = element_text(size=20),axis.text.x=element_text(size=20),axis.text.y=element_text(size=20),title=element_text(size=20),legend.text = element_text(size=14),legend.title = element_text(size=15))
+G2<-G1+geom_vline(xintercept = mu.3$theta3.mean,color=c("red","blue","darkgreen"))
+G2
+G1
+```
+
+
+```{r}
+t3.lab1<-bquote(theta[3]^mle~true==.(theta[3]))
+
+G2.1<-G2+annotate("text", x=1.08*theta[3],y=500, label=t3.lab1,size=7,angle=0,color="blue")
+#G2.1
+
+####
+mu.3.ori<-round(mu.3$theta3.mean[1],4)
+
+ lab.3.ori<-bquote(bar(theta)[3]^mle*original == .(mu.3.ori))
+ 
+ 
+ 
+#lab.ori<-paste("Theta1.MLE.Ori=",round(mu$theta1.mean[1],4))
+
+
+
+G2.2<-G2.1+annotate("text", x=1.08*theta[3],y=450,label=lab.3.ori,size=7,angle=0,color="red")
+#G2.2
+
+mu.3.approx<-round(mu.3$theta3.mean[2],4)
+
+lab.3.approx<-bquote(bar(theta)[3]^mle*approximate == .(mu.3.approx))
+ 
+
+#lab.appro<-paste("Theta1.MLE.Limit=",round(mu$theta1.mean[2],4))
+
+G2.3<-G2.2+annotate("text", x=1.08*theta[3],y=400, label=lab.3.approx,size=7,angle=0,color="darkgreen")
+G2.3
+```
+
+
+```{r}
+ggsave("theta3.mle.pdf",scale=1,width=30,height=20,units="cm")
+```
+
+
+###
+##########################################################################################
+
+##########################################################################################
+
+##########################################################################################
+
+##########################################################################################
+
+##########################################################################################
+
+
+#original_waste_rubbish_fowards
+##########################################################################################
+
+##########################################################################################
+```{r}
+
+data.theta2.mle<-data.frame(id=1:length(mle.ori[,1]),mle.ori[,2],mle.approx[,2],stringsAsFactors=FALSE)
+
+colnames(data.theta2.mle)<-c("id","theta2.mle.original","theta2.mle.limit")
+
+ melt.theta2.mle<-melt(data.theta2.mle,id=c("id"))
+ 
+ 
+mu.2<-ddply(melt.theta2.mle, "variable", summarise, theta2.mean=mean(value))
+
+mu.2$variable<-as.character(mu.2$variable)
+
+mu.2[3,]<-c('True.Theta2',theta[2]) 
+
+
+
+mu.2$variable<-as.factor(mu.2$variable)
+mu.2$theta2.mean<-as.numeric(mu.2$theta2.mean)
+
+class(mu.2$theta2.mean)
+
+```
+
+
+
+```{r}
+p1<-ggplot(melt.theta2.mle,aes(x=value,color=variable,fill=variable))+geom_histogram(aes(y = ..density..),alpha=0.5,boundary = 0,show.legend = TRUE,position="identity")+guides(fill = guide_legend(title = "Theta2.MLE"),colour = guide_legend(title = "Theta2.MLE"))+ylab("Count")+xlab("Theta2.MLE") +geom_density(alpha=0.5)+ggtitle("Histogram of Theta2.MLE")+theme_bw()+theme(axis.title.x = element_text(size=20),axis.title.y = element_text(size=20),axis.text.x=element_text(size=20),axis.text.y=element_text(size=20),title=element_text(size=20),legend.text = element_text(size=14),legend.title = element_text(size=15))
+#f1
+p2<-p1+geom_vline(xintercept = mu.2$theta2.mean,color=c("red","blue","darkgreen"))
+#f2
+  
+  
+
+p2.1<-p2+annotate("text", x=1.15*theta[2],y=10, label=paste("True.Theta2=",theta[2]),size=7,angle=0,color="blue")
+#p2.1
+
+lab.ori.2<-paste("Theta2.MLE.Ori=",round(mu.2$theta2.mean[1],4))
+
+p2.2<-p2.1+annotate("text", x=1.13,y=9.5,label=lab.ori.2,size=7,angle=0,color="red")
+#p2.2
+
+lab.appro.2<-paste("Theta2.MLE.Limit=",round(mu.2$theta2.mean[2],4))
+
+p2.3<-p2.2+annotate("text", x=1.13,y=9, label=lab.appro.2,size=7,angle=0,color="darkgreen")
+p2.3
+
+
+```
+
+
+```{r}
+ggsave("theta2.mle.pdf",scale=1,width=30,height=20,units="cm")
+```
+
+
+
+
+
+#original_waste_rubbish
+
+##############################################################################################
+
+```{r}
+
+data.theta3.mle<-data.frame(id=1:length(mle.ori[,1]),mle.ori[,3],mle.approx[,3],stringsAsFactors=FALSE)
+
+colnames(data.theta3.mle)<-c("id","theta3.mle.original","theta3.mle.limit")
+
+ melt.theta3.mle<-melt(data.theta3.mle,id=c("id"))
+ 
+ 
+mu.3<-ddply(melt.theta3.mle, "variable", summarise, theta3.mean=mean(value))
+
+mu.3$variable<-as.character(mu.3$variable)
+
+mu.3[3,]<-c('True.Theta3',theta[3]) 
+
+
+
+mu.3$variable<-as.factor(mu.3$variable)
+mu.3$theta3.mean<-as.numeric(mu.3$theta3.mean)
+
+class(mu.3$theta3.mean)
+
+```
+
+
+
+```{r}
+g1<-ggplot(melt.theta3.mle,aes(x=value,color=variable,fill=variable))+geom_histogram(aes(y = ..density..),alpha=0.5,boundary = 0,show.legend = TRUE,position="identity")+guides(fill = guide_legend(title = "Theta3.MLE"),colour = guide_legend(title = "Theta3.MLE"))+ylab("Count")+xlab("Theta3.MLE") +geom_density(alpha=0.5)+ggtitle("Histogram of Theta3.MLE")+theme_bw()+theme(axis.title.x = element_text(size=20),axis.title.y = element_text(size=20),axis.text.x=element_text(size=20),axis.text.y=element_text(size=20),title=element_text(size=20),legend.text = element_text(size=14),legend.title = element_text(size=15))
+
+g2<-g1+geom_vline(xintercept = mu.3$theta3.mean,color=c("red","blue","darkgreen"))
+
+g2
+```
+
+
+```{r}
+  
+
+g2.1<-g2+annotate("text", x=1.15*theta[3],y=200, label=paste("True.Theta3=",theta[3]),size=7,angle=0,color="blue")
+g2.1
+
+lab.ori.3<-paste("Theta3.MLE.Ori=",round(mu.3$theta3.mean[1],4))
+
+g2.2<-g2.1+annotate("text", x=1.15*theta[3],y=190,label=lab.ori.3,size=7,angle=0,color="red")
+#p2.2
+
+lab.appro.3<-paste("Theta3.MLE.Limit=",round(mu.3$theta3.mean[2],4))
+
+g2.3<-g2.2+annotate("text", x=1.15*theta[3],y=180, label=lab.appro.3,size=7,angle=0,color="darkgreen")
+g2.3
+
+
+```
+
+
+
+
+
+```{r}
+ggsave("theta3.mle.pdf",scale=1,width=30,height=20,units="cm")
+```
+
+
+
+
+
+#Finish
+
