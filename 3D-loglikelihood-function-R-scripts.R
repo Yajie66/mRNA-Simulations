@@ -1,0 +1,176 @@
+
+
+# The original stochastic model with three reactions
+
+
+ssa.f<-function(Mt,theta,S0){
+  
+  Sini<-S0
+  
+  names(Sini)<-c('S1','S2')
+  
+  S.can<-S0
+  
+  t<-0
+  
+  Reaction<-matrix(c(-1,0,0,+1,0,-1),byrow=TRUE,ncol=2)
+  
+  while(t[length(t)] <= Mt){
+    
+    if ( S.can[1] != 0  |   S.can[2] != 0 ){
+      
+      theta.can<-c(theta[1]*S.can[1], theta[2]*S.can[1], theta[3]*S.can[2])
+      
+      lambda<-sum(theta.can, na.rm = T) 
+      
+      wait<-rexp(1,rate=lambda)
+      
+      
+      t[length(t)+1] <-t[length(t)]+wait
+      
+      if ( S.can[1] > 0  ){
+        
+        
+        prob<-theta.can/lambda   
+        
+        R.can<-sample(size =1,x=c(1,2,3), prob = prob)
+        
+        
+        
+        if(R.can==1){
+          S.can<-S.can+Reaction[1,] } else{
+            
+            if(R.can==3){
+              S.can<-S.can+Reaction[3,]
+            }else{
+              
+              S.can<-S.can+Reaction[2,]
+            }
+          }
+        
+      }else{
+        
+        if(S.can[2] > 0){
+          S.can<- S.can+Reaction[3,] }else{ return( cbind.data.frame(t,Sini) )  } 
+        
+      }
+      
+    }else{ return(cbind.data.frame(t,Sini) )}
+    
+    Sini<-rbind.data.frame(Sini,S.can)
+    
+  }
+  
+  
+  names(Sini)<-paste0('Species',c('mRNA','Protein'))
+  cbind.data.frame(jump.times=t,Sini)
+  
+}
+
+
+
+result<-na.omit(ssa.f(Mt,theta,S0)) 
+
+result[length(result[,1]),]<-c(Mt,result[length(result[,1])-1,2],result[length(result[,1])-1,3])
+
+S.pro<- result %>% select(c('SpeciesProtein'))
+
+ei<-rep(NA,l=length(S.pro[,1]))
+
+for(j in 2:(length(S.pro[,1])-1)){
+  ei[j]<-S.pro[j,1]-S.pro[j-1,1]
+}
+
+sum.ei<- length(which(ei==1))
+index.birth<- which(ei==1)
+
+birth.ti<-result$jump.times[index.birth]  #birth time, jumps times
+
+
+#hessian function
+hessian<-function(sum.ei,Mt,par1,par2,S0){
+  
+  the1<- par1
+  the2<- par2
+  
+  x0<-S0[1]
+  s.ei<-sum.ei
+  
+  
+  part1<- (2*x0*s.ei*(1-exp(-the1*Mt)))/(the1^3*the2)
+  
+  part2<-  -(Mt*x0*s.ei*(1+exp(-the1*Mt)))/(the1^2*the2)
+  
+  part3<- -(Mt^2*x0*exp(-the1*Mt)*s.ei)/(the1*the2)
+  
+  part4<- -(x0^2*(exp(-the1*Mt)-1))^2/(the1^4)
+  
+  part5<- -(Mt*x0^2*exp(-the1*Mt)*(exp(-the1*Mt)-1))/(the1^3)
+  
+  
+  local.hessian<-part1+part2 + part3+part4+  part5
+  
+  
+  
+  return(local.hessian)
+}
+
+
+loglikelihood.full.data<-function(par1,par2){
+  
+  the1<- par1
+  
+  the2<- par2
+  ln2<-log(the2)
+  
+  x0<-S0[1]
+  
+  
+  
+  out<- sum.ei*ln2-the1*sum(birth.ti)+(the2*x0*(exp(-the1*Mt)-1))/the1
+  #out<100*out
+  return(out)
+}
+
+library(plot3D)
+
+x <- seq(0.000001, 0.15, length = 1000) #theta1
+y <- seq(0.05, 100, length = 1000) #theta2
+z <- outer(x, y, loglikelihood.full.data)
+
+
+t.l<-loglikelihood.full.data(par1=0.11,par2=1)
+
+# xlab=expression(theta[2]),ylab=expression(theta[1]) 
+
+# plot the 3D surface
+persp3d(x, y, z,col = "lightblue", shade = 0,border = NA,theta = 90,xlab='theta1',ylab='theta2',zlab='loglikelihood',box = FALSE)
+par_true <- c(0.11, 1)
+points3d(
+  x = par_true[1],
+  y = par_true[2],
+  z = t.l,
+  color = "red",
+  size = 10
+)
+
+# -- (2a) Add Contour Lines on the Floor (optional) --
+z_floor <- min(z, na.rm = TRUE)
+contour_levels <- pretty(range(z, na.rm = TRUE), n = 10)
+contours <- contourLines(x, y, z, levels = contour_levels)
+for (i in seq_along(contours)) {
+  xs <- contours[[i]]$x
+  ys <- contours[[i]]$y
+  lines3d(xs, ys, rep(z_floor, length(xs)), color = "black", lwd = 2)
+}
+
+# -- (2b) Mark the true parameter on the floor
+par_true <- c(0.11, 1)
+points3d(
+  x = par_true[1],
+  y = par_true[2],
+  z = z_floor,
+  color = "red",
+  size = 10
+)
+
