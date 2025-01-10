@@ -281,8 +281,8 @@ text(
   x     = theta1.hat,
   y     = theta2.hat,
   labels = bquote(
-    hat(theta) == "("~.(round(theta1.hat, 3))~","~.(round(theta2.hat, 3))~")"
-  ),
+  theta^{"true"} == "(" ~ .(round(theta1.hat, 3)) ~ "," ~ .(round(theta2.hat, 3)) ~ ")"
+),
   pos   = 4,
   col   = "blue"
 )
@@ -309,7 +309,7 @@ $$
 
 # Example grid
 theta1.seq <-seq(0.001, 0.2, length.out = 300)  # theta1
-theta2.seq <- seq(0.05, 3,    length.out = 300)  # theta2
+theta2.seq <- seq(0.05, 2,    length.out = 300)  # theta2
 
 
 # MLE (theta1.hat, theta2.hat) either from an optimizer or known from a closed form
@@ -359,8 +359,8 @@ text(
   x     = theta1.hat,
   y     = theta2.hat,
   labels = bquote(
-    hat(theta) == "("~.(round(theta1.hat, 3))~","~.(round(theta2.hat, 3))~")"
-  ),
+  theta^{"true"} == "(" ~ .(round(theta1.hat, 3)) ~ "," ~ .(round(theta2.hat, 3)) ~ ")"
+),
   pos   = 4,
   col   = "blue"
 )
