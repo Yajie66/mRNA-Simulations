@@ -1,0 +1,393 @@
+---
+title: "mRNA-full-timedata"
+author: "Yajie Guo"
+date: "04/09/2024"
+output:
+  html_document:
+    extra_dependencies:
+      - amsmath
+      - someotherpackage
+      - extarrows
+      - color
+      - amssymb
+      - cases
+---
+
+```{r}
+
+library('dplyr')
+ssa.f<-function(Mt,theta,S0){
+  
+  Sini<-S0
+  
+  names(Sini)<-c('S1','S2')
+  
+  S.can<-S0
+  
+  t<-0
+  
+  Reaction<-matrix(c(-1,0,0,+1,0,-1),byrow=TRUE,ncol=2)
+  
+  while(t[length(t)] <= Mt){
+    
+    if ( S.can[1] != 0  |   S.can[2] != 0 ){
+      
+      theta.can<-c(theta[1]*S.can[1], theta[2]*S.can[1], theta[3]*S.can[2])
+      
+      lambda<-sum(theta.can, na.rm = T) 
+      
+      wait<-rexp(1,rate=lambda)
+      
+      
+      t[length(t)+1] <-t[length(t)]+wait
+      
+      if ( S.can[1] > 0  ){
+        
+        
+        prob<-theta.can/lambda   
+        
+        R.can<-sample(size =1,x=c(1,2,3), prob = prob)
+        
+        
+        
+        if(R.can==1){
+          S.can<-S.can+Reaction[1,] } else{
+            
+            if(R.can==3){
+              S.can<-S.can+Reaction[3,]
+            }else{
+              
+              S.can<-S.can+Reaction[2,]
+            }
+          }
+        
+      }else{
+        
+        if(S.can[2] > 0){
+          S.can<- S.can+Reaction[3,] }else{ return( cbind.data.frame(t,Sini) )  } 
+        
+      }
+      
+    }else{ return(cbind.data.frame(t,Sini) )}
+    
+    Sini<-rbind.data.frame(Sini,S.can)
+    
+  }
+  
+  
+  names(Sini)<-paste0('Species',c('mRNA','Protein'))
+  cbind.data.frame(jump.times=t,Sini)
+  
+}
+
+Mt=50
+theta<-c(0.11,1,0.03)
+S0<-c(1000,1)
+
+result<-na.omit(ssa.f(Mt,theta,S0)) 
+
+result[length(result[,1]),]<-c(Mt,result[length(result[,1])-1,2],result[length(result[,1])-1,3])
+
+S.pro<- result %>% select(c('SpeciesProtein'))
+
+ei<-rep(NA,l=length(S.pro[,1]))
+
+for(j in 2:(length(S.pro[,1])-1)){
+  ei[j]<-S.pro[j,1]-S.pro[j-1,1]
+}
+
+sum.ei<- length(which(ei==1))
+index.birth<- which(ei==1)
+
+birth.ti<-result$jump.times[index.birth]  #birth time, jumps times
+
+```
+
+
+```{r}
+#hessian function
+hessian<-function(sum.ei,Mt,par1,par2,S0){
+  
+  the1<- par1
+  the2<- par2
+  
+  x0<-S0[1]
+  s.ei<-sum.ei
+  
+  
+  part1<- (2*x0*s.ei*(1-exp(-the1*Mt)))/(the1^3*the2)
+  
+  part2<-  -(Mt*x0*s.ei*(1+exp(-the1*Mt)))/(the1^2*the2)
+  
+  part3<- -(Mt^2*x0*exp(-the1*Mt)*s.ei)/(the1*the2)
+  
+  part4<- -(x0^2*(exp(-the1*Mt)-1))^2/(the1^4)
+  
+  part5<- -(Mt*x0^2*exp(-the1*Mt)*(exp(-the1*Mt)-1))/(the1^3)
+  
+  
+  local.hessian<-part1+part2 + part3+part4+  part5
+  
+  
+  
+  return(local.hessian)
+}
+
+
+loglikelihood.full.data<-function(par1,par2){
+  
+  the1<- par1
+  
+  the2<- par2
+  ln2<-log(the2)
+  
+  x0<-S0[1]
+  
+  
+  
+  out<- sum.ei*ln2-the1*sum(birth.ti)+(the2*x0*(exp(-the1*Mt)-1))/the1
+  #out<100*out
+  return(out)
+}
+
+```
+
+
+
+
+
+## Let us start form here.
+
+```{r}
+
+library(plot3D)
+
+library(plot3Drgl)
+
+x <- seq(0.000001, 0.15, length = 1000) #theta1
+y <- seq(0.05, 3, length = 1000) #theta2
+z <- outer(x, y, loglikelihood.full.data)
+
+
+t.l<-loglikelihood.full.data(par1=0.11,par2=1)
+
+# xlab=expression(theta[2]),ylab=expression(theta[1]) 
+
+# plot the 3D surface
+persp3d(x, y, z,col = "lightblue", shade = 0,border = NA,theta = 90,xlab='theta1',ylab='theta2',zlab='loglikelihood',box = FALSE)
+par_true <- c(0.11, 1)
+
+points3d(
+  x = par_true[1],
+  y = par_true[2],
+  z = t.l,
+  color = "red",
+  size = 10
+)
+
+
+
+# -- (2a) Add Contour Lines on the Floor (optional) --
+z_floor <- min(z, na.rm = TRUE)
+contour_levels <- pretty(range(z, na.rm = TRUE), n = 10)
+contours <- contourLines(x, y, z, levels = contour_levels)
+for (i in seq_along(contours)) {
+  xs <- contours[[i]]$x
+  ys <- contours[[i]]$y
+  lines3d(xs, ys, rep(z_floor, length(xs)), color = "black", lwd = 2)
+}
+
+
+# -- (2b) Mark the true parameter on the floor
+par_true <- c(0.11, 1)
+
+points3d(
+  x = par_true[1],
+  y = par_true[2],
+  z = z_floor,
+  color = "red",
+  size = 10
+)
+```
+
+#Do not run this, it takes forever
+```{r}
+# Save the interactive 3D plot to HTML
+writeWebGL(
+  dir      = "myWebGL",               
+  filename = "myWebGL/myplot.html", 
+  width    = 800, 
+  height   = 600,
+  snapshot = TRUE
+)
+
+```
+
+
+
+
+#Start here,
+#Here is the  Contour plot!
+
+
+#Only contour plot
+
+```{r}
+
+x <- seq(0.001, 0.2, length = 1000) #theta1
+y <- seq(0.05, 3, length = 1000) #theta2
+z <- outer(x, y, loglikelihood.full.data)
+
+contour(
+  x, 
+  y, 
+  z,
+  xlab  = expression(theta[1]),    # θ₁
+ ylab = expression(theta[2]),    # θ₂
+  main = "Log-Likelihood Contour Plot"
+)
+
+
+```
+
+
+
+#Get a plots of contour
+
+```{r}
+
+
+pdf("myContour-with-MLE.pdf", width = 8, height = 6)
+
+contour(
+  theta1.seq, theta2.seq, z,
+  xlab  = expression(theta[1]),    # θ₁
+      ylab = expression(theta[2]),    # θ₂
+  main = "Log-Likelihood Contours + 95% CI"
+)
+
+# Mark the true parameter in 2D
+points(
+  x = par_true[1], 
+  y = par_true[2], 
+  pch = 19, 
+  col = "red", 
+  cex = 1
+)
+
+
+
+text(
+  x     = theta1.hat,
+  y     = theta2.hat,
+  labels = bquote(
+    hat(theta) == "("~.(round(theta1.hat, 3))~","~.(round(theta2.hat, 3))~")"
+  ),
+  pos   = 4,
+  col   = "blue"
+)
+
+
+```
+
+
+
+
+
+
+#The confidence Interval
+
+$$
+
+\{ (\theta_1,\theta_2):\, 2|l(\hat{\theta})-l(\theta_1,\theta_2)| \leq \chi_{2,1-\alpha^2 }\}
+
+$$
+
+# add the confident interval with the chi-square approximation.
+
+```{r}
+
+# Example grid
+theta1.seq <-seq(0.001, 0.2, length.out = 300)  # theta1
+theta2.seq <- seq(0.05, 3,    length.out = 300)  # theta2
+
+
+# MLE (theta1.hat, theta2.hat) either from an optimizer or known from a closed form
+theta1.hat <- 0.11
+theta2.hat <- 1
+z <- outer(theta1.seq, theta2.seq, FUN = Vectorize(loglikelihood.full.data))
+```
+
+
+```{r}
+# Maximum log-likelihood value:
+llhat <- loglikelihood.full.data(theta1.hat, theta2.hat)
+
+
+dev <- 2 * (llhat - z)
+crit_val <- qchisq(0.95, df = 2)  # ~ 5.9915 for 95% CI
+
+```
+
+```{r}
+pdf("myContour-with-chi-squre-CI.pdf", width = 8, height = 6)
+
+
+#Basic 2D contour of the log-likelihood
+contour(
+  theta1.seq, theta2.seq, z,
+  xlab  = expression(theta[1]),    # θ₁
+      ylab = expression(theta[2]),    # θ₂
+  main = "Log-Likelihood Contours + 95% CI"
+)
+
+
+# Add the boundary of the region: dev = crit_val
+contour(
+  theta1.seq, theta2.seq, dev,
+  levels = crit_val,       # the contour level
+  drawlabels = FALSE, 
+  add = TRUE,              # add to existing plot
+  col = "red", 
+  lwd = 2
+)
+
+
+points(theta1.hat, theta2.hat, 
+       pch = 19, col = "blue", cex = 0.5)
+text(
+  x     = theta1.hat,
+  y     = theta2.hat,
+  labels = bquote(
+    hat(theta) == "("~.(round(theta1.hat, 3))~","~.(round(theta2.hat, 3))~")"
+  ),
+  pos   = 4,
+  col   = "blue"
+)
+
+
+
+#Optional with the shade
+
+
+# Get contour lines for dev = crit_val
+region_line <- contourLines(theta1.seq, theta2.seq, dev, levels = crit_val)
+
+# region_line is a list of line(s). Typically, for a single closed contour,
+# it's region_line[[1]]. Let's assume there's only one closed boundary:
+
+cl <- region_line[[1]]
+x_poly <- cl$x
+y_poly <- cl$y
+
+# Now fill that region. 
+# We fill the region *outside* the contour or inside depending on your data shape.
+# Usually, we fill inside by coloring it and rely on plotting order to see it.
+polygon(x_poly, y_poly, col = rgb(1, 0, 0, alpha=0.2), border = NA)
+```
+
+
+
+
+
+
