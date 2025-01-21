@@ -1,0 +1,872 @@
+---
+title: "3D-Contour plots"
+author: "Yajie Guo"
+date: "20/01/2025"
+output: html_document
+---
+output:
+  html_document:
+    extra_dependencies:
+      - amsmath
+      - someotherpackage
+      - extarrows
+      - color
+      - amssymb
+      - cases
+---
+
+#The loglikelihood of $\theta_1,\theta_2$ only related to total birth number of protein and the birth time.
+
+$$
+L(\theta_1,\theta_2)=ln(\theta_2)\sum_{i=1}^k e_i-\theta_1\sum_{i=1}^k e_it_i
+ + \frac{\theta_2x_1(0)}{\theta_1}(exp(-\theta_1T)-1)
+ $$
+
+
+```{r}
+
+library('dplyr')
+
+
+ssa.f<-function(Mt,theta,S0){
+  
+  Sini<-S0
+  
+  names(Sini)<-c('S1','S2')
+  
+  S.can<-S0
+  
+  t<-0
+  
+  Reaction<-matrix(c(-1,0,0,+1,0,-1),byrow=TRUE,ncol=2)
+  
+  while(t[length(t)] <= Mt){
+    
+    if ( S.can[1] != 0  |   S.can[2] != 0 ){
+      
+      theta.can<-c(theta[1]*S.can[1], theta[2]*S.can[1], theta[3]*S.can[2])
+      
+      lambda<-sum(theta.can, na.rm = T) 
+      
+      wait<-rexp(1,rate=lambda)
+      
+      
+      t[length(t)+1] <-t[length(t)]+wait
+      
+      if ( S.can[1] > 0  ){
+        
+        
+        prob<-theta.can/lambda   
+        
+        R.can<-sample(size =1,x=c(1,2,3), prob = prob)
+        
+        
+        
+        if(R.can==1){
+          S.can<-S.can+Reaction[1,] } else{
+            
+            if(R.can==3){
+              S.can<-S.can+Reaction[3,]
+            }else{
+              
+              S.can<-S.can+Reaction[2,]
+            }
+          }
+        
+      }else{
+        
+        if(S.can[2] > 0){
+          S.can<- S.can+Reaction[3,] }else{ return( cbind.data.frame(t,Sini) )  } 
+        
+      }
+      
+    }else{ return(cbind.data.frame(t,Sini) )}
+    
+    Sini<-rbind.data.frame(Sini,S.can)
+    
+  }
+  
+  
+  names(Sini)<-paste0('Species',c('mRNA','Protein'))
+  cbind.data.frame(jump.times=t,Sini)
+  
+}
+
+#original function,ssa
+ori.f<-function(Mt,theta,S0){
+  
+  Sini<-S0
+  
+  
+  S.can<-S0
+  
+  t<-0
+  
+  Reaction<-matrix(c(-1,0,0,+1,0,-1),byrow=TRUE,ncol=2)
+  
+  
+  
+  while(t[length(t)] <  Mt){
+    
+    
+    if ( S.can[1] != 0  |   S.can[2] != 0 ){
+      
+      
+      theta.can<-c(theta[1]*S.can[1], theta[2]*S.can[1], theta[3]*S.can[2])
+      
+      lambda<-sum(theta.can, na.rm = T) 
+      
+      wait<-rexp(1,rate=lambda)
+      
+      
+      
+      t[length(t)+1] <-t[length(t)]+wait
+      
+      
+      if(t[length(t)]<= Mt){
+        
+        if ( S.can[1] > 0  ){
+          
+          
+          prob<-theta.can/lambda   
+          
+          R.can<-sample(size =1,x=c(1,2,3), prob = prob)
+          
+          
+          
+          if(R.can==1){
+            S.can<-S.can+Reaction[1,] 
+            
+            
+          }else{
+            
+            if(R.can==3){
+              #protein death process
+              
+              
+              
+              S.can<-S.can+Reaction[3,]
+              
+              
+            }else{
+              
+              S.can<-S.can+Reaction[2,] #protein birth process
+            }
+          }
+          
+        }else{
+          
+          if(S.can[2] > 0){
+            S.can<- S.can+Reaction[3,]  #protein death process
+            
+          }
+          
+        }
+        
+      }else{
+        t[length(t)]=Mt
+        
+      }   
+      
+    }
+    
+    
+    Sini<-rbind.data.frame(Sini,S.can)
+    
+  }
+  
+  total.d<- cbind.data.frame(t,Sini)
+  
+  colnames(total.d)<-c("t","S1.ori","S2.ori")
+  
+  return(total.d)
+  
+}
+
+
+
+#Extract the Ei(event.type up or down) and Ti(integral of integral) from original Protein process(S2) 
+
+OriS2.ei.ti<-function(original.out){
+  
+  S2.ori<-original.out[,3]
+  
+  Ei<-rep(NA,l=length(S2.ori))
+  Ti<-original.out[,1]
+  
+  ori.I2<-0
+  
+  
+  for(i in 2:(length(S2.ori)-1)){
+    
+    if(S2.ori[i] == (S2.ori[i-1]+1)){
+      Ei[i]<-1 #birth_of_protein
+      
+    }else{
+      if(S2.ori[i] == (S2.ori[i-1]-1)){
+        Ei[i]<-0  #death_of_protein
+        
+      }else{
+        Ei[i]<-NA 
+        Ti[i]<-NA
+      }}
+  }
+  
+  
+  
+  #the integral of protein
+  
+  index<-which(!is.na(Ti))
+  
+  
+  for(i in 2:length(index)){
+    
+    ori.I2<-ori.I2+(Ti[index[i]]-Ti[index[i-1]])*S2.ori[index[i-1]]
+  }
+  
+  S2.data.na<-cbind(Ti,S2.ori,Ei)
+  
+  S2.data<-S2.data.na[index,]
+  
+  list(total.data=S2.data[,1:2],Event.type=S2.data[,3],Integral.protein=ori.I2)
+}
+
+
+
+```
+
+
+#Generate one dataset of CTMC model for the original mRNA and protein system
+
+```{r}
+
+
+N=1000
+#Boundary.parameter<-c(zapsmall(0+(1e-5), digits = 6),zapsmall(1-(1e-5), digits = 6))
+
+theta<-c(0.11,0.001*N,0.03) 
+
+S0<-c(N,0)
+
+Mt=50
+
+
+result<-na.omit(ssa.f(Mt,theta,S0)) 
+
+
+
+
+result[length(result[,1]),]<-c(Mt,result[length(result[,1])-1,2],result[length(result[,1])-1,3])
+
+
+
+S.pro<- result %>% select(c('SpeciesProtein'))
+
+ei<-rep(NA,l=length(S.pro[,1]))
+
+for(j in 2:(length(S.pro[,1])-1)){
+  ei[j]<-S.pro[j,1]-S.pro[j-1,1]
+}
+
+sum.ei<- length(which(ei==1))
+index.birth<- which(ei==1)
+
+birth.ti<-result$jump.times[index.birth]  #birth time, jumps times
+
+```
+
+#Extract the data of sum_ei(total birth number) and birth time(t_i) in likelihood function
+
+
+
+```{r}
+
+##Parameter Estimator
+
+#input the (theta_1, log(theta_2) and log(theta_3))
+
+Neg.loglike.fun<-function(theta,ei,Ti,S0.1,I.2){
+  
+  theta1<-theta[1]
+  
+  # ln.theta2<-log(theta[2])
+  
+  ln.theta2<-theta[2]
+  
+  theta2<-exp(theta[2])
+  
+  # ln.theta3<-log(theta[3])
+  
+  ln.theta3<-theta[3]
+  theta3<-exp(theta[3])
+  
+  t.max=Mt
+  OUT<- -( sum(ei)*ln.theta2- theta1*sum(ei*Ti)+ sum(1-ei)*ln.theta3+ ((theta2*S0.1)/theta1)*(exp(-theta1*t.max)-1)-theta3*I.2)
+  
+  return(OUT)
+}
+
+
+
+MLE.es<-function(single.out,S0){
+  
+  Ti<-single.out$total.data[,1][-c(1,length(single.out$total.data[,1]))]
+  
+  ei<-single.out$Event.type[-c(1,length(single.out$Event.type))]
+  
+  S0.1<-S0[1]
+  
+  I.2<-single.out$Integral.protein
+  
+  #hat.mle<-optim(par=c(0.01,0.01,0.01),fn=Neg.loglike.fun,Ti=Ti,ei=ei,S0.1=S0.1,I.2=I.2,lower = Boundary.parameter[1], upper =Boundary.parameter[2],method="L-BFGS-B")$par
+  
+  
+  hat.ln.mle<-optim(par=c(0.01,0.01,0.01),fn=Neg.loglike.fun,Ti=Ti,ei=ei,S0.1=S0.1,I.2=I.2)$par
+  
+  hat.mle<-c(hat.ln.mle[1],exp(hat.ln.mle[2:3]))                 
+  return(hat.mle)
+}
+```
+
+
+
+```{r}
+#write.csv(result, file = "myProtein-one-trajectory.csv", row.names = FALSE)
+data.llk.jumptime<-OriS2.ei.ti(result)
+
+#saveRDS(data.llk.jumptime, "myProteinLoglikedata.csv")
+
+#mydata2 <- readRDS("myProteinLoglikedata.csv")
+
+(hat.theta12<-MLE.es(single.out = data.llk.jumptime,S0=S0)[1:2])
+
+```
+
+
+
+
+#Start here!
+
+
+
+#Run the MLE from the given one trajectory
+
+
+
+
+
+```{r}
+#given data of sum.ei and birth time ti
+loglikelihood.full.data<-function(par1,par2){
+  
+  the1<- par1
+  
+  the2<- par2
+  ln2<-log(the2)
+  
+  x0<-S0[1]
+  
+  out<- sum.ei*ln2-the1*sum(birth.ti)+(the2*x0*(exp(-the1*Mt)-1))/the1
+  #out<100*out
+  return(out)
+}
+
+```
+
+#Start from here: 3D plot of loglikelihood function
+
+```{r}
+
+par_true <- c(0.11, 1)
+
+
+# Zoom range around (0.11, 1)
+x_zoom <- seq(par_true[1] - 0.02, par_true[1] + 0.02, length.out = 200)
+y_zoom <- seq(par_true[2] - 0.1, par_true[2] + 0.1, length.out = 200)
+
+
+# Recompute z for the zoomed grid
+z_zoom <- outer(x_zoom, y_zoom, loglikelihood.full.data)
+
+```
+
+
+
+
+
+
+```{r}
+
+
+pdf(file="myContour-with-TURE-Theta.pdf", width = 8, height = 6)
+contour(
+  x_zoom, 
+  y_zoom, 
+  z_zoom,
+  xlab  = expression(theta[1]),    # θ₁
+ ylab = expression(theta[2]),    # θ₂
+  main = "Log-Likelihood Contour Plot",
+ nlevels=80
+)
+
+# Mark the true parameter in 2D
+points(
+  x = par_true[1], 
+  y = par_true[2], 
+  pch = 19, 
+  col = "red", 
+  cex = 1
+)
+points(
+  x =hat.theta12[1], 
+  y = hat.theta12[2], 
+  pch = 19, 
+  col = "blue", 
+  cex = 1
+)
+
+
+text(
+  x     = par_true[1],
+   y = par_true[2], 
+  labels = bquote(
+  theta^{"true"} == "(" ~ .(round(par_true[1], 3)) ~ "," ~ .(round(par_true[2], 3)) ~ ")"
+),
+  pos   = 4,
+  col   = "red"
+)
+
+text(
+  x     = hat.theta12[1],
+   y = hat.theta12[2], 
+  labels = bquote(
+  theta^{"mle"} == "(" ~ .(round(hat.theta12[1], 3)) ~ "," ~ .(round(hat.theta12[2], 3)) ~ ")"
+),
+  pos   = 4,
+  col   = "blue"
+)
+
+
+dev.off()  # this line finalizes and closes the PDF device
+```
+
+
+
+
+#3D loglikelihood plots
+
+```{r}
+library(plot3D)
+
+library(plot3Drgl)
+
+#x <- seq(0.08, 0.14, length = 1000) #theta1 0.11 true 
+#y <- seq(0.8,1.2, length = 1000) #theta2  1 true
+#z <- outer(x, y, loglikelihood.full.data)
+
+t.l<-loglikelihood.full.data(par1=0.11,par2=1)
+
+# xlab=expression(theta[2]),ylab=expression(theta[1]) 
+
+# plot the 3D surface
+persp3d(x_zoom, y_zoom, z_zoom,col = "lightblue", shade = 0,border = NA,theta = 90,xlab='theta1',ylab='theta2',zlab='loglikelihood',box = FALSE)
+
+
+points3d(
+  x =hat.theta12[1], 
+  y = hat.theta12[2], 
+  z = loglikelihood.full.data(par1=hat.theta12[1],par2=hat.theta12[2]),
+  size = 10, 
+  col = "blue", 
+  cex = 1
+)
+
+points3d(
+  x = par_true[1],
+  y = par_true[2],
+  z = t.l,
+  color = "red",
+  size = 10
+)
+
+
+
+# -- (2a) Add Contour Lines on the Floor (optional) --
+#z_floor <- min(z, na.rm = TRUE)
+#contour_levels <- pretty(range(z, na.rm = TRUE), n = 10)
+#contours <- contourLines(x, y, z, levels = contour_levels)
+#for (i in seq_along(contours)) {
+#  xs <- contours[[i]]$x
+#  ys <- contours[[i]]$y
+#  lines3d(xs, ys, rep(z_floor, length(xs)), color = "black", lwd = 2)
+#}
+# Recompute z for the zoomed grid
+
+z_floor <- min(z_zoom, na.rm = TRUE)
+
+# Create more contour levels (e.g., 30)
+range_z_zoom <- range(z_zoom, na.rm = TRUE)
+contour_levels_zoom <- seq(range_z_zoom[1], range_z_zoom[2], length.out = 60)
+
+# Get contour lines at these finer levels
+contours_zoom <- contourLines(x_zoom, y_zoom, z_zoom, levels = contour_levels_zoom)
+
+# Draw the floor contours in rgl
+for (i in seq_along(contours_zoom)) {
+  xs <- contours_zoom[[i]]$x
+  ys <- contours_zoom[[i]]$y
+  lines3d(xs, ys, rep(z_floor, length(xs)), color = "black", lwd = 2)
+}
+
+
+
+
+# -- (2b) Mark the true parameter on the floor
+
+
+points3d(
+  x = par_true[1],
+  y = par_true[2],
+  z = z_floor,
+  color = "red",
+  size = 10
+)
+
+points3d(
+  x =hat.theta12[1], 
+  y = hat.theta12[2], 
+  z = z_floor,
+  size = 10, 
+  col = "blue", 
+  cex = 1
+)
+
+```
+
+
+```{r}
+library(htmlwidgets)  # for saveWidget
+
+# Convert to a widget
+my_widget <- rglwidget(width = 800, height = 800)
+
+# Save the widget to an HTML file
+saveWidget(my_widget, file = "my3Dplot.html")
+
+```
+
+
+
+#Confidence Interval
+
+#sample variance----hessian function
+```{r}
+#negative hessian
+#hessian function
+hessian<-function(sum.ei,Mt,par1,par2,S0){
+  
+  the1<- par1
+  the2<- par2
+  
+  x0<-S0[1]
+  s.ei<-sum.ei
+  
+  
+ dev_theta_1.square<- -2*the2*x0/(the1^3)+ 2*the2*x0*the1^{-3}*exp(-the1*Mt) + 2*Mt*the2*x0*the1^{-2}*(exp(-the1*Mt))+ Mt^2*the2*x0*exp(-the1*Mt)/the1
+ 
+  dev_the2.square<- -sum.ei*(the2^{-2})
+  
+  dev_theta1_theta2<- -the1^{-2}*(exp(-the1*Mt)-1)-Mt*the1^{-1}*exp(-the1*Mt)
+ 
+  
+ local.hessian<-dev_theta_1.square*dev_the2.square-dev_theta1_theta2^2
+  
+ H<-matrix(c(dev_theta_1.square, dev_theta1_theta2, dev_theta1_theta2, dev_the2.square),nrow = 2, byrow = TRUE)
+ 
+  sigma<-solve(H)
+  
+return(  sigma)
+  
+}
+
+
+```
+
+
+
+
+#Asymptotic Confidence Interval
+
+
+$$
+\hat{\boldsymbol{\theta}_i}\pm \sqrt{\chi^2(\alpha,2)*C_{i,i}}\\
+C_{i,i}=2*H^{-1}_{ii}
+$$
+
+
+```{r}
+the1<-hat.theta12[1]
+the2<-hat.theta12[2]
+
+x0=S0[1]/N
+
+sigma<-hessian(sum.ei=sum.ei,Mt=Mt,par1=the1,par2=the2,S0=S0/N)
+
+c((hat.theta12  -sqrt(qchisq(0.95, df = 1)*(-1)*eigen(Sigma)$values*2))[1],(hat.theta12 +sqrt(qchisq(0.95, df = 1)*(-1)*eigen(Sigma)$values*2))[1])
+#hat_theta_1
+
+c((hat.theta12  -sqrt(qchisq(0.95, df = 1)*(-1)*eigen(Sigma)$values*2))[2],(hat.theta12 +sqrt(qchisq(0.95, df = 1)*(-1)*eigen(Sigma)$values*2))[2])
+
+#hat_theta_2
+
+```
+
+
+
+
+
+```{r}
+
+
+pdf("myContour-with-ACI.pdf", width = 8, height = 6)
+# Zoom range around (0.11, 1)
+x_zoom <- seq(0.02, 0.2, length.out = 200)
+y_zoom <- seq(0.9,1.05, length.out = 200)
+
+
+# Recompute z for the zoomed grid
+z_zoom <- outer(x_zoom, y_zoom, loglikelihood.full.data)
+
+
+
+contour(
+  x_zoom, 
+  y_zoom, 
+  z_zoom,
+  xlab = expression(theta[1]),  # θ₁
+  ylab = expression(theta[2]),  # θ₂
+  main = "Log-Likelihood Contour Plot with Asymptotic Confidence Interval",
+  nlevels = 100
+)
+
+# Mark the true parameter in 2D
+points(
+  x = par_true[1], 
+  y = par_true[2], 
+  pch = 19, 
+  col = "red", 
+  cex = 1
+)
+
+points(
+  x = hat.theta12[1], 
+  y = hat.theta12[2], 
+  pch = 19, 
+  col = "blue", 
+  cex = 1
+)
+
+text(
+  x = par_true[1],
+  y = par_true[2], 
+  labels = bquote(
+    theta^{"true"} == "(" ~ .(round(par_true[1], 3)) ~ "," ~ .(round(par_true[2], 3)) ~ ")"
+  ),
+  pos = 4,
+  col = "red"
+)
+
+text(
+  x = hat.theta12[1],
+  y = hat.theta12[2], 
+  labels = bquote(
+    theta^{"mle"} == "(" ~ .(round(hat.theta12[1], 3)) ~ "," ~ .(round(hat.theta12[2], 3)) ~ ")"
+  ),
+  pos = 4,
+  col = "blue"
+)
+
+# Example covariance matrix
+Sigma <- (-1)*sigma
+
+# Generate and overlay the confidence region
+ellipse_points <- function(center, covmat, level = 0.95, npoints = 200) {
+  r <- sqrt(qchisq(level, df = 2))
+  eig <- eigen(covmat)
+  evec <- eig$vectors
+  evals <- eig$values
+  axes <- r * sqrt(evals)
+  theta_seq <- seq(0, 2*pi, length.out = npoints)
+  circle <- cbind(cos(theta_seq), sin(theta_seq))
+  ellipse <- t(evec %*% (diag(axes) %*% t(circle)))
+  ellipse[,1] <- ellipse[,1] + center[1]
+  ellipse[,2] <- ellipse[,2] + center[2]
+  ellipse
+}
+
+# Add the confidence region
+confidence_region <- ellipse_points(hat.theta12, Sigma, level = 0.95)
+polygon(confidence_region, col = rgb(1, 0.5, 0.2, 0.3), border = NA)
+```
+
+
+
+
+
+```{r}
+
+
+# Zoom range around (0.11, 1)
+#x_zoom <- seq(par_true[1] - 0.02, par_true[1] + 0.02, length.out = 200)
+#y_zoom <- seq(par_true[2] - 0.1, par_true[2] + 0.1, length.out = 200)
+
+pdf("myContour-with-ACI.pdf", width = 8, height = 6)
+# Zoom range around (0.11, 1)
+x <- seq(theta1_lower- 0.02, theta1_upper + 0.02, length.out = 200)
+y <- seq(theta2_lower - 0.1, theta2_upper+ 0.1, length.out = 200)
+
+
+# Recompute z for the zoomed grid
+z<- outer(x, y, loglikelihood.full.data)
+
+contour(x, y, z, nlevels = 100,
+        xlab = expression(theta[1]),
+        ylab = expression(theta[2]),
+        main = "Log-Likelihood Contour Plot")
+
+# Mark MLE
+points(hat.theta12[1], hat.theta12[2], pch = 19, col = "blue")
+points( par_true[1],  par_true[2], pch = 19, col = "red",  cex = 1)
+
+text(
+  x     = hat.theta12[1],
+  y     = hat.theta12[2],
+  labels = bquote(
+  theta^{"mle"} == "(" ~ .(round(hat.theta12[1], 3)) ~ "," ~ .(round(hat.theta12[2], 3)) ~ ")"
+),
+  pos   = 4,
+  col   = "blue"
+)
+text(
+  x     = par_true[1],
+   y = par_true[2], 
+  labels = bquote(
+  theta^{"true"} == "(" ~ .(round(par_true[1], 3)) ~ "," ~ .(round(par_true[2], 3)) ~ ")"
+),
+  pos   = 3,
+  col   = "red"
+)
+# Remove or comment out the abline(...) lines
+# Then draw the rectangle:
+
+rect(
+  xleft   = theta1_lower,
+  ybottom = theta2_lower,
+  xright  = theta1_upper,
+  ytop    = theta2_upper,
+  border  = "blue",
+  lty     = 2,
+  lwd     = 2
+)
+```
+
+
+
+
+
+
+
+#The confidence Interval--likelihood-based Confidence Intervals
+
+$$
+
+\{ (\theta_1,\theta_2):\, 2|l(\hat{\theta})-l(\theta_1,\theta_2)| \leq \chi_{2,1-\alpha^2 }\}
+
+$$
+The sample derivance follows the $\chi^2(1,1-\alpha)$ distribution for one of the parameter. We set the 95/% of contour boundary as the $\chi_{2,1-\alpha^2}^2 $ plane.
+
+```{r}
+# Maximum log-likelihood value:
+llhat <- loglikelihood.full.data(hat.theta12[1], hat.theta12[2])
+
+z <- outer(x_zoom, y_zoom, FUN = Vectorize(loglikelihood.full.data))
+
+dev <- 2 * (llhat - z)
+
+crit_val <- qchisq(0.95, df = 2)  # ~ 5.9915 for 95% CI
+
+```
+
+```{r}
+pdf("myContour-with-chi-squre-CI.pdf", width = 8, height = 6)
+
+
+#Basic 2D contour of the log-likelihood
+contour(
+  x_zoom,y_zoom, z,
+  xlab  = expression(theta[1]),    # θ₁
+      ylab = expression(theta[2]),    # θ₂
+  main = "Log-Likelihood Contours + 95% CI",
+  nlevels = 80
+)
+
+# Add the boundary of the region: dev = crit_val
+contour(
+ x_zoom, y_zoom, dev,
+  levels = crit_val,       # the contour level
+  drawlabels = FALSE, 
+  add = TRUE,              # add to existing plot
+  col = "red", 
+  lwd = 2
+)
+points(
+  x = par_true[1], 
+  y = par_true[2], 
+  pch = 19, 
+  col = "red", 
+  cex = 1
+)
+
+points(hat.theta12[1], hat.theta12[2], 
+       pch = 19, col = "blue", cex = 0.5)
+
+
+
+text(
+  x     = hat.theta12[1],
+  y     = hat.theta12[2],
+  labels = bquote(
+  theta^{"mle"} == "(" ~ .(round(hat.theta12[1], 3)) ~ "," ~ .(round(hat.theta12[2], 3)) ~ ")"
+),
+  pos   = 4,
+  col   = "blue"
+)
+text(
+  x     = par_true[1],
+   y = par_true[2], 
+  labels = bquote(
+  theta^{"true"} == "(" ~ .(round(par_true[1], 3)) ~ "," ~ .(round(par_true[2], 3)) ~ ")"
+),
+  pos   = 4,
+  col   = "red"
+)
+
+#Optional with the shade
+
+
+# Get contour lines for dev = crit_val
+region_line <- contourLines(x_zoom,y_zoom, dev, levels = crit_val)
+
+# region_line is a list of line(s). Typically, for a single closed contour,
+# it's region_line[[1]]. Let's assume there's only one closed boundary:
+
+cl <- region_line[[1]]
+x_poly <- cl$x
+y_poly <- cl$y
+
+# Now fill that region. 
+# We fill the region *outside* the contour or inside depending on your data shape.
+# Usually, we fill inside by coloring it and rely on plotting order to see it.
+polygon(x_poly, y_poly, col = rgb(1, 0, 0, alpha=0.2), border = NA)
+```
+
